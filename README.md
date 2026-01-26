@@ -83,21 +83,59 @@ CACHE_DIR=./data
 
 ## Usage
 
-### Analyze a Paper
+### Check Dependencies
+
+Before running, verify all dependencies are available:
 
 ```bash
-stratum analyze <DOI> --max-depth 3
+stratum doctor
+```
+
+### Analyze a Paper
+
+Analyze a paper recursively:
+
+```bash
+stratum analyze <DOI> --max-depth 3 --max-citations 5
 ```
 
 Example:
 ```bash
-stratum analyze 10.1000/example.2024 --max-depth 2
+stratum analyze 10.1000/example.2024 --max-depth 2 --max-citations 3
 ```
+
+Options:
+- `--max-depth, -d`: Maximum recursion depth (default: 3)
+- `--max-citations, -c`: Max citations per paper (default: 5)
+- `--output-dir, -o`: Output directory (default: ./output)
+- `--model, -m`: LLM model to use (overrides .env)
+- `--verbose/--quiet, -v/-q`: Enable/disable verbose output
 
 ### Check Status
 
+View analysis progress and statistics:
+
 ```bash
 stratum status
+```
+
+Shows:
+- Total papers processed
+- Papers by depth level
+- List of processed DOIs
+
+### Reset State
+
+Clear analysis state to reprocess papers:
+
+```bash
+stratum reset --force
+```
+
+### Version Info
+
+```bash
+stratum version
 ```
 
 ## Project Structure
@@ -126,8 +164,10 @@ Stratum/
 - [x] **Phase 1**: Project foundation and data models ✅
 - [x] **Phase 2**: Agent tools (PDF, citations, paper fetcher) ✅
 - [x] **Phase 3**: LLM abstraction and agent definitions ✅
-- [ ] **Phase 4**: Crew orchestration and recursive flow (NEXT)
-- [ ] **Phase 5**: CLI and production polish
+- [x] **Phase 4**: Crew orchestration and recursive flow ✅
+- [x] **Phase 5**: CLI and production polish ✅
+
+**🎉 MVP Complete!** All core functionality implemented and tested.
 
 ### Future Enhancements (Post-MVP)
 - [ ] **Streamlit Web Interface**: Interactive UI for exploring papers and citation graphs
