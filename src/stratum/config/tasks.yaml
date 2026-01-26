@@ -82,10 +82,10 @@ analyze_paper:
        - Include DOI, title, and notes explaining relevance
 
     CRITICAL: Output MUST be valid JSON matching the KnowledgeTable schema.
-    Use this exact structure:
+    Use this exact structure (replace placeholders with actual values):
     {{
-      "kt_id": "KT_{year}_{first_author_lastname}",
-      "meta": {{"title": "...", "authors": [...], "year": {year}, "doi": "{doi}"}},
+      "kt_id": "KT_YYYY_AuthorLastname",
+      "meta": {{"title": "...", "authors": [...], "year": YYYY, "doi": "..."}},
       "core_analysis": {{
         "central_hypothesis": "...",
         "methodology_summary": "...",
