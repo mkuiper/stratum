@@ -1,0 +1,136 @@
+fetch_paper:
+  description: >
+    Fetch the paper with DOI {doi} or from PDF path {pdf_path}.
+
+    Your tasks:
+    1. Download the PDF if a DOI is provided (use PaperFetcherTool)
+    2. Extract full text from the PDF (use PDFTextExtractorTool)
+    3. Parse the bibliography using GROBID (use CitationFinderTool)
+    4. Rank citations by importance and select top {max_citations} for recursive analysis
+
+    Ranking criteria (in order of priority):
+    - Must have DOI (required for fetching)
+    - Foundational papers (those the work builds upon) > Comparison > Refuting
+    - Recent publications (prefer newer foundational work)
+    - Complete metadata (title, authors, year)
+
+    Current recursion state:
+    - Current depth: {current_depth}
+    - Maximum depth: {max_depth}
+    - Papers already processed: {processed_dois}
+
+    Return a summary including:
+    - PDF path (local cache)
+    - Extracted text (full paper content)
+    - Top {max_citations} citations ranked by importance with justification
+  expected_output: >
+    A structured report containing:
+    1. Paper metadata (title, authors, year, DOI)
+    2. Path to cached PDF
+    3. Full extracted text
+    4. List of top {max_citations} citations to process recursively, each with:
+       - DOI, title, authors, year
+       - Importance rank (1-{max_citations})
+       - Justification for inclusion
+       - Usage type (Foundational/Comparison/Refuting)
+
+analyze_paper:
+  description: >
+    Analyze the paper text following the Whitesides Standard and extract a
+    JSON Knowledge Table.
+
+    Paper text:
+    {paper_text}
+
+    Paper metadata:
+    - Title: {title}
+    - Authors: {authors}
+    - Year: {year}
+    - DOI: {doi}
+
+    YOUR TASK:
+    Extract a complete Knowledge Table following these rules:
+
+    1. CENTRAL HYPOTHESIS
+       - What specific question is being answered?
+       - What was the proposed solution or claim?
+       - Be specific and precise
+
+    2. METHODOLOGY SUMMARY
+       - High-level description of the approach
+       - What techniques/methods were used?
+       - What datasets or experiments?
+
+    3. SIGNIFICANCE
+       - Why does this work matter?
+       - What gap does it fill?
+       - What are the broader implications?
+
+    4. KEY POINTS (at least 3)
+       - Each must be an atomic, verifiable claim
+       - Each MUST have evidence_anchor (Table/Figure/Equation reference)
+       - Assign confidence_score (0.0-1.0) based on evidence strength
+       - Format: {{"id": "KP1", "content": "...", "evidence_anchor": "Table 2", "confidence_score": 0.95}}
+
+    5. LOGIC CHAINS (at least 1)
+       - How do key points connect to reach the conclusion?
+       - Format: "KP1 (establishes X) → KP2 (shows Y) → KP3 (demonstrates Z) → Conclusion"
+
+    6. CITATION NETWORK
+       - Extract citations mentioned in the text
+       - Classify usage_type: Foundational (builds on), Comparison (compares with), Refuting (contradicts)
+       - Include DOI, title, and notes explaining relevance
+
+    CRITICAL: Output MUST be valid JSON matching the KnowledgeTable schema.
+    Use this exact structure:
+    {{
+      "kt_id": "KT_{year}_{first_author_lastname}",
+      "meta": {{"title": "...", "authors": [...], "year": {year}, "doi": "{doi}"}},
+      "core_analysis": {{
+        "central_hypothesis": "...",
+        "methodology_summary": "...",
+        "significance": "..."
+      }},
+      "key_points": [{{"id": "KP1", "content": "...", "evidence_anchor": "...", "confidence_score": 0.0}}],
+      "logic_chains": [{{"name": "...", "argument_flow": "...", "conclusion_derived": "..."}}],
+      "citation_network": [{{"target_paper_doi": "...", "target_paper_title": "...", "usage_type": "Foundational", "notes": "..."}}]
+    }}
+  expected_output: >
+    Valid JSON conforming to the KnowledgeTable Pydantic schema with all required
+    fields populated. The JSON must be parseable by Python's json.loads() and
+    validate against stratum.models.knowledge_table.KnowledgeTable.
+
+archive_paper:
+  description: >
+    Convert the JSON Knowledge Table into Obsidian markdown format.
+
+    Knowledge Table JSON:
+    {knowledge_table_json}
+
+    YOUR TASK:
+    1. Validate the JSON against the KnowledgeTable schema
+    2. Generate YAML frontmatter with metadata and tags
+    3. Create markdown content with proper sections:
+       - Title (# header)
+       - Metadata (authors, year, DOI with link)
+       - Central Hypothesis (## header)
+       - Methodology (## header)
+       - Significance (## header)
+       - Key Points (## header with ### sub-headers for each KP)
+       - Logic Chains (## header with ### sub-headers for each chain)
+       - Citation Network (## header, grouped by usage type)
+    4. Convert citations to Obsidian wikilinks: [[DOI|Title]]
+    5. Save to {output_dir}/papers/{kt_id}.md
+
+    FORMATTING REQUIREMENTS:
+    - YAML frontmatter enclosed in ---
+    - Include tags: ['knowledge-table', 'scientific-paper', 'stratum']
+    - Use proper markdown heading hierarchy
+    - Include confidence scores for key points
+    - Group citations by usage type (Foundational, Comparison, Refuting)
+    - Add footer: "Generated by Stratum"
+
+    Use the ObsidianFormatterTool to generate the file.
+  expected_output: >
+    Confirmation message with the full path to the created markdown file.
+    Example: "Knowledge Table archived to /path/to/output/papers/KT_2024_Smith.md"

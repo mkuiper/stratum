@@ -40,7 +40,7 @@ Stratum performs deep analysis of scientific papers by extracting their fundamen
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd Stratum
+cd stratum
 ```
 
 2. Create virtual environment and install:
@@ -67,7 +67,9 @@ Edit `.env` to configure:
 
 ```bash
 # LLM - Switch between providers
-LLM_MODEL=gpt-4o  # or claude-3-5-sonnet-20241022, ollama/llama3.2
+# Supported: OpenAI (gpt-4o), Anthropic (claude-3-5-sonnet-20241022),
+#            Google Gemini (gemini/gemini-2.0-flash-exp), Ollama (ollama/llama3.2)
+LLM_MODEL=gpt-4o
 LLM_API_KEY=your_api_key_here
 
 # Recursion settings
@@ -121,11 +123,21 @@ Stratum/
 
 ## Development Status
 
-- [x] **Phase 1**: Project foundation and data models
-- [ ] **Phase 2**: Agent tools (PDF, citations, paper fetcher)
-- [ ] **Phase 3**: LLM abstraction and agent definitions
-- [ ] **Phase 4**: Crew orchestration and recursive flow
+- [x] **Phase 1**: Project foundation and data models ✅
+- [x] **Phase 2**: Agent tools (PDF, citations, paper fetcher) ✅
+- [x] **Phase 3**: LLM abstraction and agent definitions ✅
+- [ ] **Phase 4**: Crew orchestration and recursive flow (NEXT)
 - [ ] **Phase 5**: CLI and production polish
+
+### Future Enhancements (Post-MVP)
+- [ ] **Streamlit Web Interface**: Interactive UI for exploring papers and citation graphs
+  - Paper upload and real-time analysis
+  - Interactive Obsidian graph visualization
+  - Citation network navigation with filtering
+  - Evidence strength visualization
+- [ ] **Figure/Table Extraction**: Computer vision for data extraction
+- [ ] **Semantic Search**: Vector embeddings for similarity queries
+- [ ] **Collaboration Features**: Shared vaults, annotations, discussions
 
 ## Data Contract
 
@@ -215,8 +227,17 @@ Contributions welcome! Please ensure:
 
 MIT
 
+## Knowledge Distillation
+
+Stratum performs **forensic knowledge distillation** - extracting the logical structure from narrative papers. See [knowledge/knowledge_distillation.md](knowledge/knowledge_distillation.md) for details on:
+- The Whitesides Standard approach
+- Evidence anchoring and logic chain mapping
+- Typed citation networks (Foundational/Comparison/Refuting)
+- Recursive knowledge graph construction
+
 ## Acknowledgments
 
 - Based on the Whitesides Standard for scientific writing
 - Powered by CrewAI, LiteLLM, and GROBID
 - Designed for Obsidian graph visualization
+- Supports OpenAI, Anthropic, Google Gemini, and Ollama (local) models

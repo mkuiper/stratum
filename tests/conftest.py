@@ -1,6 +1,7 @@
 """Pytest fixtures for Stratum tests."""
 import pytest
 from pathlib import Path
+import os
 
 
 @pytest.fixture
@@ -79,3 +80,27 @@ def temp_data_dir(tmp_path):
     (data_dir / "processed").mkdir()
     (data_dir / "state").mkdir()
     return data_dir
+
+
+@pytest.fixture(autouse=True)
+def mock_api_keys():
+    """Mock API keys for all tests that need them."""
+    original_openai = os.environ.get("OPENAI_API_KEY")
+    original_anthropic = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Set dummy keys for testing
+    os.environ["OPENAI_API_KEY"] = "sk-test-key-for-testing-only"
+    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test-key-for-testing-only"
+
+    yield
+
+    # Restore original values
+    if original_openai is not None:
+        os.environ["OPENAI_API_KEY"] = original_openai
+    elif "OPENAI_API_KEY" in os.environ:
+        del os.environ["OPENAI_API_KEY"]
+
+    if original_anthropic is not None:
+        os.environ["ANTHROPIC_API_KEY"] = original_anthropic
+    elif "ANTHROPIC_API_KEY" in os.environ:
+        del os.environ["ANTHROPIC_API_KEY"]
