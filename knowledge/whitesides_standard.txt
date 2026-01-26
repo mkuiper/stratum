@@ -1,0 +1,83 @@
+# The Whitesides Standard for Scientific Papers
+
+## Core Philosophy
+
+A scientific paper is an organized description of hypotheses, data, and conclusions.
+
+## Key Principles
+
+### 1. Hypothesis-Driven Analysis
+
+A paper exists to answer a question or test a hypothesis. Every element should connect back to:
+- What question is being investigated?
+- What was the proposed answer (hypothesis)?
+- How was this tested?
+
+### 2. Data-Centric Approach
+
+Text is secondary; data is primary. Every claim must be anchored to specific evidence:
+- Tables showing numerical results
+- Figures visualizing data
+- Equations formalizing relationships
+- Statistical tests demonstrating significance
+
+### 3. Logical Structure Over Chronological Narrative
+
+Papers are not stories of discovery. They should be organized by:
+- Importance of findings
+- Logical flow from hypothesis to conclusion
+- Strength of evidence
+
+Ignore the chronological sequence ("first we did X, then Y"). Focus on the argument structure:
+"Given hypothesis H, we show evidence E1, E2, E3, therefore conclusion C."
+
+### 4. Evidence Anchoring
+
+Every key point must reference its supporting evidence:
+- "The model achieves 95% accuracy" → "Table 2"
+- "Temperature affects reaction rate" → "Figure 3"
+- "Results are statistically significant" → "p < 0.001, Student's t-test"
+
+## Application to Stratum
+
+When analyzing papers with Stratum:
+
+1. **Extract the Central Hypothesis**
+   - Not just "we studied X"
+   - But "we hypothesized that X causes Y because of Z"
+
+2. **Identify Key Data Points**
+   - Each with specific figure/table reference
+   - Confidence score based on evidence strength
+   - Ignore unsupported claims
+
+3. **Map Logic Chains**
+   - How do the key points connect?
+   - What argument leads from hypothesis to conclusion?
+   - What is the logical flow?
+
+4. **Classify Citations**
+   - Foundational: Work we build upon
+   - Comparison: Alternative approaches we compare against
+   - Refuting: Claims we challenge or contradict
+
+## Example Analysis
+
+**Paper**: "Deep Learning for Climate Prediction"
+
+**Central Hypothesis**:
+"Deep neural networks can improve long-term climate prediction accuracy compared to traditional statistical models."
+
+**Key Points**:
+- KP1: "Proposed CNN-LSTM hybrid achieves 23% lower RMSE than ARIMA baseline" (Table 3, confidence: 0.92)
+- KP2: "Improvement is statistically significant (p < 0.001, paired t-test)" (Figure 4, confidence: 0.95)
+- KP3: "Model captures non-linear dynamics that traditional models miss" (Figure 5, confidence: 0.85)
+
+**Logic Chain**:
+KP1 (lower error) → KP2 (statistically significant) → KP3 (captures complexity) →
+**Conclusion**: Deep learning significantly outperforms traditional methods for climate prediction.
+
+**Citations**:
+- Hochreiter & Schmidhuber (1997) "LSTM Networks" → Foundational (provides core architecture)
+- Box & Jenkins (1976) "ARIMA Models" → Comparison (baseline method)
+- Smith et al. (2020) "Climate Models" → Foundational (provides dataset and evaluation metrics)
