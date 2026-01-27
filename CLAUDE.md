@@ -167,6 +167,50 @@ See `knowledge/whitesides_standard.txt` for detailed guidance.
 
 ## 🎉 MVP COMPLETE - All 5 Phases Implemented!
 
+## Recent Critical Fixes (2026-01-26)
+
+### Issues Addressed from Code Review
+
+**1. PDF Page Count Bug (CRITICAL - FIXED)**
+- Issue: Accessing `len(doc)` after `doc.close()` in PDFTextExtractorTool
+- Fix: Store page count before closing document
+- Impact: Prevents runtime errors during PDF processing
+
+**2. Mutable Defaults in Flow State (HIGH - FIXED)**
+- Issue: Lists and dicts as default values in StratumFlowState
+- Fix: Use `Field(default_factory=list/dict)` for Pydantic models
+- Impact: Prevents shared mutable state between flow instances
+
+**3. Crew Task Chaining (CRITICAL - FIXED)**
+- Issue: Crew only created fetch_task, never chained Analyst/Archivist tasks
+- Fix: Create all three tasks with context dependencies:
+  * `fetch_task` (Librarian) - fetches paper, extracts text, finds citations
+  * `analyze_task` (Analyst) - creates Knowledge Table JSON (depends on fetch)
+  * `archive_task` (Archivist) - generates Obsidian markdown (depends on analyze)
+- Impact: **Enables actual Librarian → Analyst → Archivist pipeline execution**
+
+**4. Citation Extraction Implementation (CRITICAL - FIXED)**
+- Issue: `_parse_crew_result()` returned placeholders (citations=[])
+- Fix: Parse CrewAI result to extract citation DOIs from fetch task output
+- Impact: **Enables recursive citation traversal** - recursion now works!
+
+**5. Integration Test Coverage (ADDED)**
+- Added: `test_crew_task_chaining` to verify all three tasks are created
+- Validates: Task count, agent count, and context dependencies
+- Impact: Catches regression in task chaining
+
+### Current Test Status
+- ✅ **112 tests passing** (2 skipped)
+- ✅ **60% code coverage** overall
+- ✅ All unit tests pass
+- ✅ Integration tests verify workflow
+
+### Known Limitations (Medium Priority)
+These do not block MVP but should be addressed in future:
+- No atomic file writes for state (crash safety)
+- Citation ranking biased toward recent papers (may not be truly "foundational")
+- Error surfacing from PaperFetcherTool failures could be improved
+
 ## Important Notes for Claude
 
 1. **Never modify the KnowledgeTable schema** without updating tests
