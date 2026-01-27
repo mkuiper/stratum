@@ -173,8 +173,8 @@ class StratumFlow(Flow):
             if self.verbose:
                 print(f"   ✅ Completed: {doi}")
 
-            # Extract citations for recursion
-            if depth < self.max_depth - 1:
+            # Extract citations for recursion (if not at max depth)
+            if depth < self.max_depth:
                 citations = self._extract_foundational_citations(result)
 
                 if self.verbose and citations:
@@ -257,11 +257,20 @@ class StratumFlow(Flow):
         """
         citations = crew_result.get("citations", [])
 
+        if self.verbose:
+            print(f"   🔍 Extracting citations: {len(citations)} found in crew result")
+
         # Filter for foundational citations only
-        foundational = [
-            cite for cite in citations
-            if isinstance(cite, dict) and cite.get("usage_type") == "Foundational"
-        ]
+        # Also accept citations without usage_type (assume foundational if has DOI)
+        foundational = []
+        for cite in citations:
+            if isinstance(cite, dict) and cite.get("doi"):
+                usage = cite.get("usage_type", "Foundational")
+                if usage == "Foundational" or not cite.get("usage_type"):
+                    foundational.append(cite)
+
+        if self.verbose and foundational:
+            print(f"   📚 {len(foundational)} citations with DOIs eligible for recursion")
 
         # Extract DOIs
         dois = [cite.get("doi") for cite in foundational if cite.get("doi")]

@@ -169,22 +169,52 @@ class StratumCrew:
 
             # Try to extract citations from result
             citations = []
+            found_dois = set()  # Use set to dedupe
+
             if hasattr(result, 'tasks_output') and result.tasks_output:
                 # Get fetch task output (first task)
                 fetch_output = str(result.tasks_output[0])
 
+                if self.verbose:
+                    print(f"\n   📋 Parsing citations from fetch task output ({len(fetch_output)} chars)")
+
                 # Parse citations from fetch output
                 # Look for DOI patterns
-                doi_pattern = r'10\.\d{4,}/[^\s,\])"]+'
-                found_dois = re.findall(doi_pattern, fetch_output)
+                doi_pattern = r'10\.\d{4,}/[^\s,\])\'"}>]+'
+                raw_dois = re.findall(doi_pattern, fetch_output)
 
-                # Create citation dicts
-                for cite_doi in found_dois[:self.max_citations if hasattr(self, 'max_citations') else 5]:
-                    if cite_doi != doi:  # Don't include self-citation
-                        citations.append({
-                            "doi": cite_doi,
-                            "usage_type": "Foundational"  # Default assumption
-                        })
+                # Clean up DOIs (remove trailing punctuation)
+                for raw_doi in raw_dois:
+                    # Strip trailing punctuation
+                    clean_doi = raw_doi.rstrip('.,;:')
+                    if clean_doi != doi:  # Don't include self-citation
+                        found_dois.add(clean_doi)
+
+                if self.verbose:
+                    print(f"   🔎 Found {len(found_dois)} unique DOIs in fetch output")
+
+            # Also search the full result string for DOIs
+            doi_pattern = r'10\.\d{4,}/[^\s,\])\'"}>]+'
+            all_dois = re.findall(doi_pattern, result_str)
+            for raw_doi in all_dois:
+                clean_doi = raw_doi.rstrip('.,;:')
+                if clean_doi != doi:
+                    found_dois.add(clean_doi)
+
+            # Create citation dicts
+            max_cites = self.max_citations if hasattr(self, 'max_citations') else 5
+            for cite_doi in list(found_dois)[:max_cites]:
+                citations.append({
+                    "doi": cite_doi,
+                    "usage_type": "Foundational"  # Default assumption
+                })
+
+            if self.verbose:
+                print(f"   📚 Total unique citations extracted: {len(citations)}")
+                for c in citations[:3]:
+                    print(f"      • {c['doi']}")
+                if len(citations) > 3:
+                    print(f"      ... and {len(citations) - 3} more")
 
             # Try to load knowledge table if markdown was created
             knowledge_table = None
@@ -205,6 +235,8 @@ class StratumCrew:
         except Exception as e:
             if self.verbose:
                 print(f"Warning: Error parsing crew result: {e}")
+                import traceback
+                traceback.print_exc()
             # Return empty result on parse failure
             return {
                 "knowledge_table": None,

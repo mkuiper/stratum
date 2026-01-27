@@ -4,6 +4,8 @@ from typing import List, Dict, Optional
 import requests
 from pydantic import Field
 import xml.etree.ElementTree as ET
+import urllib.parse
+import time
 
 from .base import StratumBaseTool
 
@@ -27,7 +29,13 @@ class CitationFinderTool(StratumBaseTool):
         default="http://localhost:8070/api/processReferences",
         description="GROBID API endpoint URL"
     )
+    crossref_url: str = Field(
+        default="https://api.crossref.org/works",
+        description="CrossRef API endpoint for DOI lookup"
+    )
     timeout: int = Field(default=60, description="Request timeout in seconds")
+    lookup_dois: bool = Field(default=True, description="Enable DOI lookup via CrossRef")
+    max_doi_lookups: int = Field(default=10, description="Max citations to look up DOIs for")
 
     def _run(self, pdf_path: str) -> List[Dict[str, any]]:
         """
@@ -77,7 +85,157 @@ class CitationFinderTool(StratumBaseTool):
 
         # Parse GROBID TEI-XML response
         citations = self._parse_tei_xml(response.text)
+
+        # Look up DOIs for citations that don't have them
+        if self.lookup_dois:
+            citations = self._enrich_with_dois(citations)
+
         return citations
+
+    def _enrich_with_dois(self, citations: List[Dict]) -> List[Dict]:
+        """
+        Look up DOIs for citations using CrossRef API.
+
+        Args:
+            citations: List of citation dicts
+
+        Returns:
+            Citations with DOIs filled in where possible
+        """
+        lookups_done = 0
+
+        for citation in citations:
+            # Skip if already has DOI
+            if citation.get("doi"):
+                continue
+
+            # Skip if no title to search
+            if not citation.get("title"):
+                continue
+
+            # Limit lookups to avoid rate limiting
+            if lookups_done >= self.max_doi_lookups:
+                break
+
+            # Try to find DOI via CrossRef
+            doi = self._lookup_doi_crossref(
+                title=citation["title"],
+                authors=citation.get("authors", []),
+                year=citation.get("year")
+            )
+
+            if doi:
+                citation["doi"] = doi
+
+            lookups_done += 1
+
+            # Be nice to CrossRef API - small delay between requests
+            time.sleep(0.1)
+
+        return citations
+
+    def _lookup_doi_crossref(
+        self,
+        title: str,
+        authors: List[str] = None,
+        year: int = None
+    ) -> Optional[str]:
+        """
+        Look up a DOI using CrossRef API.
+
+        Args:
+            title: Paper title
+            authors: List of author names (optional)
+            year: Publication year (optional)
+
+        Returns:
+            DOI string if found, None otherwise
+        """
+        if not title or len(title) < 10:
+            return None
+
+        try:
+            # Build query
+            query = title
+
+            # Add first author if available
+            if authors and len(authors) > 0:
+                first_author = authors[0].split(",")[0]  # Get surname
+                query = f"{query} {first_author}"
+
+            # URL encode the query
+            encoded_query = urllib.parse.quote(query)
+
+            # Build URL with filters
+            url = f"{self.crossref_url}?query={encoded_query}&rows=3"
+
+            # Add year filter if available
+            if year:
+                url += f"&filter=from-pub-date:{year},until-pub-date:{year}"
+
+            # Make request with polite headers
+            headers = {
+                "User-Agent": "Stratum/1.0 (https://github.com/mkuiper/stratum; mailto:stratum@example.com)"
+            }
+
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                return None
+
+            data = response.json()
+            items = data.get("message", {}).get("items", [])
+
+            if not items:
+                return None
+
+            # Check if top result is a good match
+            top_result = items[0]
+            result_title = " ".join(top_result.get("title", []))
+
+            # Simple title similarity check (case-insensitive, first 50 chars)
+            if self._titles_match(title, result_title):
+                return top_result.get("DOI")
+
+            return None
+
+        except Exception as e:
+            # Silently fail - DOI lookup is best-effort
+            return None
+
+    def _titles_match(self, title1: str, title2: str) -> bool:
+        """
+        Check if two titles are similar enough to be the same paper.
+
+        Args:
+            title1: First title
+            title2: Second title
+
+        Returns:
+            True if titles match
+        """
+        # Normalize: lowercase, remove punctuation
+        def normalize(t):
+            return "".join(c.lower() for c in t if c.isalnum() or c.isspace())[:80]
+
+        t1 = normalize(title1)
+        t2 = normalize(title2)
+
+        # Check if one contains the other, or very similar
+        if t1 in t2 or t2 in t1:
+            return True
+
+        # Check word overlap
+        words1 = set(t1.split())
+        words2 = set(t2.split())
+
+        if len(words1) < 3 or len(words2) < 3:
+            return False
+
+        overlap = len(words1 & words2)
+        total = min(len(words1), len(words2))
+
+        return overlap / total > 0.7
 
     def _parse_tei_xml(self, tei_xml: str) -> List[Dict[str, any]]:
         """

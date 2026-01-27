@@ -54,6 +54,12 @@ def analyze(
         "-v/-q",
         help="Enable/disable verbose logging"
     ),
+    fresh: bool = typer.Option(
+        False,
+        "--fresh",
+        "-f",
+        help="Clear previous analysis state before starting"
+    ),
 ):
     """
     Analyze a scientific paper recursively.
@@ -85,6 +91,14 @@ def analyze(
     config_table.add_row("Output", str(output_dir or settings.OUTPUT_DIR))
     console.print(config_table)
     console.print()
+
+    # Reset state if --fresh flag is used
+    if fresh:
+        state_file = settings.CACHE_DIR / "state" / "recursion_state.json"
+        if state_file.exists():
+            manager = RecursionManager(state_file, max_depth=max_depth)
+            manager.reset()
+            console.print("[dim]Cleared previous analysis state.[/dim]\n")
 
     try:
         # Run analysis
