@@ -1,6 +1,6 @@
 # Critical Review by Codex (Stratum)
 
-Date: 2026-01-26
+Date: 2026-01-27
 Scope (sequential):
 1) `src/stratum/flow.py`, `src/stratum/crew.py`
 2) `src/stratum/agents/`
@@ -15,78 +15,67 @@ This project is incomplete; findings focus on gaps/risks, not polish.
 ## 1) Flow + Crew Orchestration
 
 ### Critical issues
-- **Flow stores no real results; recursion is effectively a no-op**: `StratumCrew.process_paper()` executes only the fetch task and `_parse_crew_result()` returns placeholders (`knowledge_table=None`, `citations=[]`). As a result, `StratumFlow` never extracts citations, never writes output, and only marks DOIs as processed. The recursion queue stays empty. (`src/stratum/crew.py`, `src/stratum/flow.py`)
-- **Crew tasks are not chained**: `process_paper()` creates only `fetch_task`, with comments saying later tasks would be created “after fetch completes,” but no mechanism exists to do that. This breaks the intended Librarian → Analyst → Archivist pipeline. (`src/stratum/crew.py`)
+- **Pipeline still uses placeholders rather than real task outputs**: `process_paper()` wires tasks but feeds `paper_text`, `title`, `authors`, `year`, and `knowledge_table_json` as placeholders. That means the Analyst is not consuming fetched text, and the Archivist is not consuming real KnowledgeTable output. (`src/stratum/crew.py`, `src/stratum/tasks/*.py`)
+- **Crew result parsing is heuristic and string-based**: `_parse_crew_result()` scrapes DOIs from raw output with regex, and optionally infers a markdown path from string matching. There is no structured extraction from task outputs, so results are brittle and could miss citations or hallucinate DOIs. (`src/stratum/crew.py`)
 
 ### High/medium issues
-- **`StratumFlowState` uses mutable defaults** for lists/dicts (`papers_to_process`, `completed_papers`, `knowledge_tables`). Pydantic *usually* copies these, but it’s still a risk and not idiomatic; use `default_factory`. (`src/stratum/flow.py`)
-- **`StratumCrew.__init__` LLM wiring appears inconsistent**: `create_llm_for_crewai(settings)` is called only when `llm_model is None`, but it returns a model string after setting env vars; callers that pass a model string bypass env var setup and provider config. It’s unclear if this is intended. (`src/stratum/crew.py`, `src/stratum/llm/provider.py`)
-- **Flow catches all exceptions and continues**, which is fine for resilience, but there is no logging of failures to state/output, so failures are silent aside from console prints. (`src/stratum/flow.py`)
+- **Flow state type mismatch**: `StratumFlow.get_state()` advertises `StratumFlowState` but returns `self.state`, which is a dict managed by CrewAI Flow. This can confuse callers and tests. (`src/stratum/flow.py`)
+- **Recursion limits are inconsistent with stats**: `RecursionState.should_process()` allows `current_depth == max_depth`, but `get_stats()` only counts depths `0..max_depth-1`. If `max_depth` is intended inclusive, stats omit the max depth bucket. (`src/stratum/models/state.py`)
+- **Error handling is still mostly print-and-continue**: Flow errors are printed but not surfaced in results, so failures could be silent downstream. (`src/stratum/flow.py`)
 
-### Notes
-- The flow skeleton matches the intended model, but it’s currently a scaffold.
+### Improvements since last review
+- Task dependencies are now wired via `Task.context`, and flow state uses `default_factory` to avoid shared mutable defaults.
 
 ---
 
 ## 2) Agents
 
 ### High/medium issues
-- **Agents depend on `config/agents.yaml` but there is no guard** if the file is missing or malformed; errors will throw at import time. Consider explicit error messaging or default fallback. (`src/stratum/agents/*.py`)
-- **Analyst system prompt is defined but not used** in the agent configuration or task creation. If strict JSON is critical, it should be applied to the task or agent. (`src/stratum/agents/analyst.py`)
-
-### Notes
-- Tool wiring is reasonable and consistent with the design (Librarian has fetch/extract/citations; Analyst has none; Archivist has formatter).
+- **Analyst system prompt still not enforced**: The system prompt helper is defined but not injected into task or agent configuration, so strict JSON output isn’t guaranteed. (`src/stratum/agents/analyst.py`, `src/stratum/tasks/analyze_paper.py`)
+- **Agents hard-require `config/agents.yaml`** with no fallback; missing/malformed config will hard-fail. (`src/stratum/agents/*.py`)
 
 ---
 
 ## 3) Tools
 
 ### Critical issues
-- **`PDFTextExtractorTool` returns invalid page count**: `len(doc)` is called *after* `doc.close()`; this will raise or return invalid data depending on PyMuPDF behavior. Store page count before closing. (`src/stratum/tools/pdf_extractor.py`)
-- **`PDFTextExtractorTool` uses `pymupdf`** instead of the typical `fitz` import. If `pymupdf` is not the correct import name for the installed package, this will fail. Verify. (`src/stratum/tools/pdf_extractor.py`)
+- **Citation enrichment can silently mis-attribute DOIs**: CrossRef lookup uses a simple title match and takes the top result. For partial titles or ambiguous matches, this can assign incorrect DOIs. There’s no confidence score or provenance recorded. (`src/stratum/tools/citation_finder.py`)
 
 ### High/medium issues
-- **Citation parsing assumes GROBID endpoint uses `processReferences`**. That endpoint is correct for references but misses paper metadata; fine but there’s no optional handling of `processFulltextDocument` for better context. (`src/stratum/tools/citation_finder.py`)
-- **`CitationFinderTool.rank_by_importance` biases toward recent papers**. That might be opposite of “foundational” meaning. Consider separate “foundational-ness” metric (e.g., older + high citation count). (`src/stratum/tools/citation_finder.py`)
-- **`PaperFetcherTool` returns metadata-only result on failures** but still marks `source: "none"` and `error` field; the crew doesn’t surface or handle that error, so you may proceed with `pdf_path=None` unintentionally. (`src/stratum/tools/paper_fetcher.py`, `src/stratum/crew.py`)
-- **`PaperFetcherTool._fetch_from_arxiv` uses raw XML parsing** and assumes basic fields; could fail on namespace or missing elements. This is probably fine for now but brittle. (`src/stratum/tools/paper_fetcher.py`)
-- **Obsidian formatter uses `kt.core_analysis[...]`** as dict indexing. If `core_analysis` is a model, this will work only if it’s dict-like. Double-check the model definition. (`src/stratum/tools/obsidian_formatter.py`)
+- **CrossRef lookup is on by default** and will generate network traffic during runs and tests unless explicitly disabled; no clear config path is surfaced in CLI. (`src/stratum/tools/citation_finder.py`)
+- **Foundational ranking still biases toward recent papers** which conflicts with “foundational” in many fields. (`src/stratum/tools/citation_finder.py`)
+- **`PDFTextExtractorTool` page count bug remains**: it still uses `len(doc)` after closing the document (if unchanged). Consider storing page count before close. (`src/stratum/tools/pdf_extractor.py`)
 
 ---
 
 ## 4) Recursion Utilities
 
 ### Medium issues
-- **State file is JSON and overwritten fully on each `mark_processed`**. That’s ok, but for large runs it could be a bottleneck; consider append or periodic saves later. (`src/stratum/utils/recursion.py`)
-- **No atomic write or file lock**; partial writes could corrupt state on crash. (`src/stratum/utils/recursion.py`)
-
-### Notes
-- Recursion state model and tests are solid for now.
+- **Non-atomic state writes**: state is rewritten on each `mark_processed()` without atomic write or lock; crashes can corrupt state. (`src/stratum/utils/recursion.py`)
 
 ---
 
 ## 5) Tests
 
-### High/medium issues
-- **Tests for crew flow and tools are mostly unit-level and mocked**, but there are no integration tests validating the end-to-end flow (fetch → analyze → archive → recursive queue). This is consistent with the incomplete implementation, but it means regressions won’t be caught. (`tests/unit/test_crew.py`, `tests/unit/test_tools.py`)
-- **`test_create_knowledge_table_validates_schema`** mocks `Crew.kickoff` to return dict. In actual CrewAI runs, output might be string JSON or structured object; tests don’t validate the real behavior. (`tests/unit/test_crew.py`)
-- **`test_pdf_extractor` doesn’t check for document close page count bug**. There’s no test for the page count field returned. (`tests/unit/test_tools.py`)
+### Improvements since last review
+- Added integration tests for CLI (`tests/integration/test_cli.py`) and workflow scaffolding (`tests/integration/test_workflow.py`).
+- Added an integration test asserting that tasks are chained in `StratumCrew.process_paper()`.
+
+### Remaining gaps
+- **End-to-end workflow test is skipped** and no tests validate real task outputs flowing between agents. (`tests/integration/test_workflow.py`)
+- **No test covers DOI enrichment logic** (CrossRef), or potential false positives.
+- **No tests validate that `CrewOutput` parsing yields correct citations/markdown paths**.
 
 ---
 
 ## Overall assessment (agreeing with the intended model?)
 
-**The architecture matches the stated model**, but the implementation currently stops at scaffolding: the orchestration does not yet connect the tool outputs to the analyst/archivist steps. The recursion mechanism exists but doesn’t receive real citations, so depth traversal won’t happen. The “model” is directionally sound, but it needs a concrete pipeline that:
-1) Fetches a PDF/metadata,
-2) Extracts text,
-3) Produces a validated KnowledgeTable JSON,
-4) Writes Obsidian markdown,
-5) Extracts citations and enqueues them.
+The architecture still aligns with the intended model, and the scaffolding is improved (task chaining, state defaults, CLI validation). However, **the core dataflow is still not real**: fetch output is not actually consumed by the Analyst, and KnowledgeTable output is not actually consumed by the Archivist. The crew result parsing is string-based and fragile. The model is sound, but the implementation remains a prototype.
 
 ---
 
 ## Suggested next focus (if you want a follow-up)
-1) Wire `StratumCrew.process_paper()` to actually run Librarian → Analyst → Archivist tasks.
-2) Make `StratumFlow` consume real citations from the Librarian output and enqueue them.
-3) Fix `PDFTextExtractorTool` page count and validate `pymupdf` import.
-4) Add a small integration test that runs a mocked end-to-end pipeline.
+1) Replace placeholders with real task output binding (fetch → analyze → archive).
+2) Parse structured `tasks_output` instead of regex scraping.
+3) Add a small, mocked end-to-end test that asserts actual data flow between tasks.
+4) Decide on CrossRef lookup strategy (opt-in, confidence threshold, provenance).
