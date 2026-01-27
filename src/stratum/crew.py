@@ -3,6 +3,7 @@ from crewai import Crew, Process
 from pathlib import Path
 from typing import Dict, List, Optional
 import json
+import re
 
 from .agents.librarian import create_librarian_agent
 from .agents.analyst import create_analyst_agent
@@ -29,7 +30,8 @@ class StratumCrew:
         self,
         llm_model: Optional[str] = None,
         output_dir: Optional[Path] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        max_citations: int = 5
     ):
         """
         Initialize Stratum crew.
@@ -38,6 +40,7 @@ class StratumCrew:
             llm_model: LLM model string (defaults to settings.LLM_MODEL)
             output_dir: Output directory for markdown files
             verbose: Enable verbose logging
+            max_citations: Maximum citations to extract per paper
         """
         # Ensure directories exist
         settings.ensure_directories()
@@ -50,6 +53,7 @@ class StratumCrew:
         # Set output directory
         self.output_dir = output_dir or settings.OUTPUT_DIR
         self.verbose = verbose
+        self.max_citations = max_citations
 
         # Create agents
         self.librarian = create_librarian_agent(self.llm_model)
@@ -91,7 +95,7 @@ class StratumCrew:
 
         processed_dois = processed_dois or []
 
-        # Create tasks
+        # Task 1: Fetch paper, extract text, and find citations
         fetch_task = create_fetch_paper_task(
             agent=self.librarian,
             doi=doi,
@@ -102,14 +106,31 @@ class StratumCrew:
             processed_dois=processed_dois
         )
 
-        # Placeholder for analyze task (will be created after fetch completes)
-        # For now, we'll create a crew with just the fetch task
-        # In a real implementation, we'd need the fetch results to create analyze task
+        # Task 2: Analyze paper text to create Knowledge Table JSON
+        # This task depends on fetch_task's output via context
+        analyze_task = create_analyze_paper_task(
+            agent=self.analyst,
+            paper_text="{paper_text}",  # Placeholder - will be filled from fetch_task context
+            title=doi or "Unknown",  # Placeholder
+            authors=["Unknown"],  # Placeholder
+            year=2024,  # Placeholder
+            doi=doi or "unknown"
+        )
+        analyze_task.context = [fetch_task]  # Wire dependency
 
-        # Create crew with sequential process
+        # Task 3: Archive Knowledge Table as Obsidian markdown
+        # This task depends on analyze_task's output via context
+        archive_task = create_archive_paper_task(
+            agent=self.archivist,
+            knowledge_table_json={"kt_id": "placeholder"},  # Placeholder - will use analyze_task output
+            output_dir=str(self.output_dir)
+        )
+        archive_task.context = [analyze_task]  # Wire dependency
+
+        # Create crew with all three tasks in sequential order
         crew = Crew(
             agents=[self.librarian, self.analyst, self.archivist],
-            tasks=[fetch_task],  # More tasks will be added dynamically
+            tasks=[fetch_task, analyze_task, archive_task],
             process=Process.sequential,
             verbose=self.verbose
         )
@@ -117,25 +138,79 @@ class StratumCrew:
         # Execute crew
         result = crew.kickoff()
 
-        return self._parse_crew_result(result)
+        return self._parse_crew_result(result, doi=doi)
 
-    def _parse_crew_result(self, result) -> Dict:
+    def _parse_crew_result(self, result, doi: Optional[str] = None) -> Dict:
         """
         Parse crew execution result.
 
         Args:
             result: CrewAI execution result
+            doi: DOI of the processed paper
 
         Returns:
-            Parsed result dict
+            Parsed result dict with:
+                - knowledge_table: KnowledgeTable dict or None
+                - markdown_path: Path to generated markdown or None
+                - citations: List of citation dicts for recursion
         """
-        # TODO: Parse actual crew result
-        # For now, return a placeholder structure
-        return {
-            "knowledge_table": None,
-            "markdown_path": None,
-            "citations": []
-        }
+        try:
+            # CrewAI result might be a string, dict, or CrewOutput object
+            result_str = str(result)
+
+            # Try to extract markdown path from result
+            markdown_path = None
+            if "archived to" in result_str.lower():
+                # Parse path from confirmation message
+                import re
+                path_match = re.search(r'(/[^\s]+\.md)', result_str)
+                if path_match:
+                    markdown_path = path_match.group(1)
+
+            # Try to extract citations from result
+            citations = []
+            if hasattr(result, 'tasks_output') and result.tasks_output:
+                # Get fetch task output (first task)
+                fetch_output = str(result.tasks_output[0])
+
+                # Parse citations from fetch output
+                # Look for DOI patterns
+                doi_pattern = r'10\.\d{4,}/[^\s,\])"]+'
+                found_dois = re.findall(doi_pattern, fetch_output)
+
+                # Create citation dicts
+                for cite_doi in found_dois[:self.max_citations if hasattr(self, 'max_citations') else 5]:
+                    if cite_doi != doi:  # Don't include self-citation
+                        citations.append({
+                            "doi": cite_doi,
+                            "usage_type": "Foundational"  # Default assumption
+                        })
+
+            # Try to load knowledge table if markdown was created
+            knowledge_table = None
+            if markdown_path and Path(markdown_path).exists():
+                # Read the markdown file to extract YAML frontmatter
+                with open(markdown_path, 'r') as f:
+                    content = f.read()
+                    # Knowledge table would be reconstructable from markdown
+                    # For now, we'll leave it as None
+                    pass
+
+            return {
+                "knowledge_table": knowledge_table,
+                "markdown_path": markdown_path,
+                "citations": citations
+            }
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Warning: Error parsing crew result: {e}")
+            # Return empty result on parse failure
+            return {
+                "knowledge_table": None,
+                "markdown_path": None,
+                "citations": []
+            }
 
     def create_knowledge_table(
         self,

@@ -1,7 +1,7 @@
 """CrewAI Flow for recursive paper analysis."""
 from crewai.flow.flow import Flow, listen, start
-from pydantic import BaseModel
-from typing import List, Tuple, Optional
+from pydantic import BaseModel, Field
+from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 import json
 
@@ -26,17 +26,17 @@ class StratumFlowState(BaseModel):
     current_depth: int = 0
 
     # Queue of papers to process
-    papers_to_process: List[PaperToProcess] = []
+    papers_to_process: List[PaperToProcess] = Field(default_factory=list)
 
     # Completed papers
-    completed_papers: List[str] = []
+    completed_papers: List[str] = Field(default_factory=list)
 
     # Configuration
     max_depth: int = 3
     max_citations: int = 5
 
     # Results
-    knowledge_tables: dict = {}  # DOI -> KnowledgeTable JSON
+    knowledge_tables: Dict[str, dict] = Field(default_factory=dict)  # DOI -> KnowledgeTable JSON
 
 
 class StratumFlow(Flow):
@@ -81,7 +81,8 @@ class StratumFlow(Flow):
         self.crew = StratumCrew(
             llm_model=llm_model,
             output_dir=output_dir,
-            verbose=verbose
+            verbose=verbose,
+            max_citations=max_citations
         )
 
         # Initialize recursion manager

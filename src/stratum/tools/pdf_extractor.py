@@ -66,14 +66,15 @@ class PDFTextExtractorTool(StratumBaseTool):
 
             text_content.append(f"--- Page {page_num} ---\n{text}")
 
-        # Extract metadata
+        # Extract metadata and page count before closing
         metadata = doc.metadata or {}
+        page_count = len(doc)
 
         doc.close()
 
         return {
             "text": "\n\n".join(text_content),
-            "pages": len(doc),
+            "pages": page_count,
             "metadata": {
                 "title": metadata.get("title", ""),
                 "author": metadata.get("author", ""),
