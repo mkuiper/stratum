@@ -89,27 +89,9 @@ class CitationFinderTool(StratumBaseTool):
         Returns:
             List of parsed citations
         """
-        try:
-            # Try using grobid-tei-xml library if available
-            from grobid_tei_xml import parse_document_xml
-            doc = parse_document_xml(tei_xml)
-
-            citations = []
-            for ref in doc.references:
-                citation = {
-                    "title": ref.article_title or "",
-                    "authors": [a.full_name for a in (ref.authors or [])],
-                    "year": ref.year,
-                    "doi": ref.doi,
-                    "raw_reference": ref.unstructured or ""
-                }
-                citations.append(citation)
-
-            return citations
-
-        except ImportError:
-            # Fallback: basic XML parsing if grobid-tei-xml not available
-            return self._parse_tei_xml_fallback(tei_xml)
+        # Use fallback parser - grobid-tei-xml expects full document XML
+        # but processReferences returns simplified XML without full header
+        return self._parse_tei_xml_fallback(tei_xml)
 
     def _parse_tei_xml_fallback(self, tei_xml: str) -> List[Dict[str, any]]:
         """
