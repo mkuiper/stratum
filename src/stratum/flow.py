@@ -76,6 +76,7 @@ class StratumFlow(Flow):
         self.max_depth = max_depth
         self.max_citations = max_citations
         self.verbose = verbose
+        self.seed_doi = None  # Will be set via kickoff
 
         # Initialize crew
         self.crew = StratumCrew(
@@ -93,28 +94,36 @@ class StratumFlow(Flow):
             max_depth=max_depth
         )
 
+    def set_seed_doi(self, seed_doi: str):
+        """Set the seed DOI for analysis."""
+        self.seed_doi = seed_doi
+        return self
+
     @start()
-    def start_analysis(self, seed_doi: str):
+    def start_analysis(self):
         """
         Start analysis with a seed paper.
 
-        Args:
-            seed_doi: DOI of the seed paper to analyze
+        The seed_doi should be set via set_seed_doi() before calling kickoff()
 
         Returns:
             Updated state
         """
+        if not self.seed_doi:
+            raise ValueError("seed_doi must be set before starting analysis")
+
         if self.verbose:
-            print(f"\n🌱 Starting recursive analysis of: {seed_doi}")
+            print(f"\n🌱 Starting recursive analysis of: {self.seed_doi}")
             print(f"   Max depth: {self.max_depth}, Max citations: {self.max_citations}\n")
 
-        # Initialize state
-        self.state = StratumFlowState(
-            current_doi=seed_doi,
-            current_depth=0,
-            max_depth=self.max_depth,
-            max_citations=self.max_citations
-        )
+        # Initialize all state keys (state is managed by CrewAI Flow as a dict)
+        self.state["current_doi"] = self.seed_doi
+        self.state["current_depth"] = 0
+        self.state["max_depth"] = self.max_depth
+        self.state["max_citations"] = self.max_citations
+        self.state["papers_to_process"] = []
+        self.state["completed_papers"] = []
+        self.state["knowledge_tables"] = {}
 
         # Process the seed paper
         return self.process_paper()
@@ -127,8 +136,8 @@ class StratumFlow(Flow):
         Returns:
             Updated state or triggers next paper
         """
-        doi = self.state.current_doi
-        depth = self.state.current_depth
+        doi = self.state["current_doi"]
+        depth = self.state["current_depth"]
 
         if self.verbose:
             print(f"\n📄 Processing paper at depth {depth}: {doi}")
@@ -159,7 +168,7 @@ class StratumFlow(Flow):
 
             # Mark as processed
             self.recursion_manager.mark_processed(doi, depth)
-            self.state.completed_papers.append(doi)
+            self.state["completed_papers"].append(doi)
 
             if self.verbose:
                 print(f"   ✅ Completed: {doi}")
@@ -174,17 +183,15 @@ class StratumFlow(Flow):
                 # Enqueue citations
                 for cite_doi in citations:
                     if self.recursion_manager.should_process_paper(cite_doi, depth + 1):
-                        self.state.papers_to_process.append(
-                            PaperToProcess(
-                                doi=cite_doi,
-                                depth=depth + 1,
-                                source_paper=doi
-                            )
-                        )
+                        self.state["papers_to_process"].append({
+                            "doi": cite_doi,
+                            "depth": depth + 1,
+                            "source_paper": doi
+                        })
 
             # Store result
             if result.get("knowledge_table"):
-                self.state.knowledge_tables[doi] = result["knowledge_table"]
+                self.state["knowledge_tables"][doi] = result["knowledge_table"]
 
         except Exception as e:
             print(f"   ❌ Error processing {doi}: {e}")
@@ -201,14 +208,14 @@ class StratumFlow(Flow):
         Returns:
             Updated state or completes flow
         """
-        if self.state.papers_to_process:
+        if self.state["papers_to_process"]:
             # Get next paper
-            next_paper = self.state.papers_to_process.pop(0)
-            self.state.current_doi = next_paper.doi
-            self.state.current_depth = next_paper.depth
+            next_paper = self.state["papers_to_process"].pop(0)
+            self.state["current_doi"] = next_paper["doi"]
+            self.state["current_depth"] = next_paper["depth"]
 
             if self.verbose:
-                print(f"\n⏭️  Queue size: {len(self.state.papers_to_process)} remaining")
+                print(f"\n⏭️  Queue size: {len(self.state['papers_to_process'])} remaining")
 
             # Process it
             return self.process_paper()
@@ -225,15 +232,15 @@ class StratumFlow(Flow):
         """
         if self.verbose:
             print(f"\n✨ Analysis complete!")
-            print(f"   Papers processed: {len(self.state.completed_papers)}")
+            print(f"   Papers processed: {len(self.state['completed_papers'])}")
             print(f"   Output directory: {self.crew.output_dir}")
 
         # Get stats
         stats = self.recursion_manager.get_stats()
 
         return {
-            "completed_papers": self.state.completed_papers,
-            "total_processed": len(self.state.completed_papers),
+            "completed_papers": self.state["completed_papers"],
+            "total_processed": len(self.state["completed_papers"]),
             "stats": stats,
             "output_dir": str(self.crew.output_dir)
         }
@@ -274,8 +281,8 @@ class StratumFlow(Flow):
             Dict with completed papers and knowledge tables
         """
         return {
-            "completed_papers": self.state.completed_papers,
-            "knowledge_tables": self.state.knowledge_tables,
+            "completed_papers": self.state.get("completed_papers", []),
+            "knowledge_tables": self.state.get("knowledge_tables", {}),
             "stats": self.recursion_manager.get_stats()
         }
 
@@ -304,6 +311,7 @@ def analyze_paper_recursive(
         verbose=verbose
     )
 
-    result = flow.kickoff(seed_doi=seed_doi)
+    flow.set_seed_doi(seed_doi)
+    result = flow.kickoff()
 
     return flow.get_results()

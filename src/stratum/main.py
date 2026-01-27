@@ -106,8 +106,9 @@ def analyze(
 
             progress.update(task, description="Processing papers...")
 
-            # Run analysis
-            results = flow.kickoff(seed_doi=doi)
+            # Set seed DOI and run analysis
+            flow.set_seed_doi(doi)
+            results = flow.kickoff()
 
         # Display results
         console.print("\n[bold green]✨ Analysis Complete![/bold green]\n")
