@@ -35,6 +35,11 @@ echo "[quickstart] Running: stratum doctor"
 stratum doctor
 
 echo ""
-echo "[quickstart] Ready. Example run:"
-echo "  stratum analyze <DOI> --max-depth 2 --max-citations 3"
+echo "[quickstart] Ready. How to run Stratum:"
+echo "  1) In this shell, you can use: stratum ...  (venv is activated)"
+echo "  2) From ANY shell, use the wrapper (no activation needed):"
+echo "     ./scripts/run.sh analyze <DOI> --max-depth 2 --max-citations 3"
+echo ""
+echo "[quickstart] Example (Nature paper):"
+echo "  ./scripts/run.sh analyze 10.1038/s41586-021-03819-2 --max-depth 2 --max-citations 5"
 echo ""
