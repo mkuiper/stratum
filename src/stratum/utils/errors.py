@@ -169,10 +169,15 @@ def check_dependencies() -> dict:
 
     # Check GROBID
     try:
-        response = requests.get(
-            settings.GROBID_URL.replace("/api", "/isalive"),
-            timeout=5
-        )
+        # GROBID exposes health at /api/isalive (not /isalive).
+        base = settings.GROBID_URL.rstrip("/")
+        # Default is http://localhost:8070/api
+        if base.endswith("/api"):
+            health_url = f"{base}/isalive"
+        else:
+            health_url = f"{base}/api/isalive"
+
+        response = requests.get(health_url, timeout=5)
         status["grobid"] = response.status_code == 200
     except Exception:
         pass

@@ -26,11 +26,11 @@ class RecursionState(BaseModel):
 
         Returns False if:
         - Already processed
-        - Current depth > max_depth (we process UP TO and INCLUDING max_depth)
+        - Current depth >= max_depth (we process depths 0..max_depth-1)
         """
         if self.is_processed(doi):
             return False
-        if current_depth > self.max_depth:
+        if current_depth >= self.max_depth:
             return False
         return True
 
