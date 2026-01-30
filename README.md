@@ -119,6 +119,50 @@ View analysis progress and statistics:
 stratum status
 ```
 
+### Citation Graph Output Format
+
+The citation graph utility (`stratum.utils.graph_builder.build_citation_graph`) emits a JSON object with the
+following structure:
+
+```json
+{
+  "nodes": [
+    {
+      "id": "KT_2025_Sample",
+      "title": "Sample Primary Paper",
+      "year": 2025,
+      "doi": "10.1234/sample.2025.001"
+    }
+  ],
+  "edges": [
+    {
+      "source": "KT_2025_Sample",
+      "target": "10.9999/reference.2020"
+    }
+  ],
+  "metadata": {
+    "source_dir": "output/papers",
+    "node_count": 1,
+    "edge_count": 1
+  }
+}
+```
+
+Required fields:
+- `nodes`: list of objects with required keys `id`, `title`, `year`, `doi` (values may be null)
+- `edges`: list of objects with required keys `source`, `target`
+- `metadata`: object with `source_dir` (string), `node_count` (int), `edge_count` (int)
+
+### Graph Demo Viewer
+
+Generate a citation graph from a tiny fixture and open a minimal viewer:
+
+```bash
+./scripts/graph_demo.sh
+```
+
+This writes `output/graph_demo/citation_graph.json` and `output/graph_demo/citation_graph.html`.
+
 Shows:
 - Total papers processed
 - Papers by depth level

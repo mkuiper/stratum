@@ -1,7 +1,18 @@
 """Pytest fixtures for Stratum tests."""
-import pytest
-from pathlib import Path
+
+from __future__ import annotations
+
 import os
+import sys
+from pathlib import Path
+
+import pytest
+
+# Ensure `src/` is importable when running pytest without an editable install.
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if SRC.exists() and str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 
 @pytest.fixture
